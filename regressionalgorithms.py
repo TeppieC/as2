@@ -118,5 +118,16 @@ class RidgeLinearRegression(Regressor):
         # Default parameters, any of which can be overwritten by values passed to params
         self.params = {'regwgt': 0.5}
         self.reset(parameters)
+    
+    def learn(self, Xtrain, ytrain):
+        """ Learns using the traindata """
+        # Dividing by numsamples before adding ridge regularization
+        # to make the regularization parameter not dependent on numsamples
+        numsamples = Xtrain.shape[0]
+        penalty = np.multiply(self.params['regwgt'],np.identity(numsamples))
+        self.weights = np.dot(np.dot(np.linalg.inv(np.add(np.dot(Xtrain.T,Xtrain)/numsamples, penalty)), Xtrain.T),ytrain)/numsamples
 
+    def predict(self, Xtest):
+        ytest = np.dot(Xtrain, self.weights)
+        return ytest
     

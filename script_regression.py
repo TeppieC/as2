@@ -39,6 +39,7 @@ if __name__ == '__main__':
 
     # Enable the best parameter to be selected, to enable comparison
     # between algorithms with their best parameter settings
+    # NOTE: this regwgt is lambda
     parameters = (
         {'regwgt': 0.0},
         {'regwgt': 0.01},
