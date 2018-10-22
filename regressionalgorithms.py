@@ -1,7 +1,7 @@
 from __future__ import division  # floating point division
 import numpy as np
 import math
-
+import time
 import utilities as utils
 
 class Regressor:
@@ -116,7 +116,7 @@ class RidgeLinearRegression(Regressor):
     """
     def __init__( self, parameters={} ):
         # Default parameters, any of which can be overwritten by values passed to params
-        self.params = {'regwgt': 0.5}
+        self.params = {'regwgt': 0.01}
         self.reset(parameters)
     
     def learn(self, Xtrain, ytrain):
@@ -124,10 +124,348 @@ class RidgeLinearRegression(Regressor):
         # Dividing by numsamples before adding ridge regularization
         # to make the regularization parameter not dependent on numsamples
         numsamples = Xtrain.shape[0]
-        penalty = np.multiply(self.params['regwgt'],np.identity(numsamples))
+        numfeatures = Xtrain.shape[1]
+        penalty = np.multiply(self.params['regwgt'],np.identity(numfeatures))
         self.weights = np.dot(np.dot(np.linalg.inv(np.add(np.dot(Xtrain.T,Xtrain)/numsamples, penalty)), Xtrain.T),ytrain)/numsamples
 
     def predict(self, Xtest):
-        ytest = np.dot(Xtrain, self.weights)
+        ytest = np.dot(Xtest, self.weights)
         return ytest
+
+class LassoLinearRegression(Regressor):
+    """docstring for LassoRegression"""
+    def __init__(self, parameters={}):
+        self.params = {'regwgt': 0.01}
+        self.reset(parameters)
+        self.max_runs = 1000000
+
+    def proximal(self, w):
+        i = 0
+        while i < w.shape[0]:
+            temp = np.dot(self.stepsize,self.params['regwgt'])
+            if w[i]>temp:
+                w[i]-=temp
+            elif w[i]<-temp:
+                w[i]+=temp
+            else:
+                w[i] = 0
+            i+=1
+        return w
+
+    def cost(self, w, X, y):
+        penalty = np.multiply(self.params['regwgt'],np.linalg.norm(w,ord=1))
+        XWminusY = np.subtract(np.dot(X,w),y)
+        return ((np.dot(XWminusY.T, XWminusY)+penalty)/(2*X.shape[0])).item()
+
+    def learn(self, X, y):
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+
+        w = np.zeros(numfeatures).reshape(numfeatures,1)#reshape w to numfeatures*1
+        err = np.Infinity
+        tolerance = 10*np.exp(-4)
+        xx = np.dot(X.T,X)/numsamples
+        xy = np.dot(X.T,y)/numsamples
+        self.stepsize = 1/(2*np.linalg.norm(xx,ord=2))
+
+        cost_w = self.cost(w, X, y)
+        runs = 0
+
+        while np.abs(cost_w - err)>tolerance and not runs>self.max_runs:
+            err = cost_w
+            w = self.proximal(w-self.stepsize*np.dot(xx,w)+self.stepsize*xy) #update w
+            cost_w = self.cost(w, X, y)
+            runs+=1
+        self.weights = w
+        
+
+    def predict(self, Xtest):
+        ## Modified
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest
+
     
+class SGDLinearRegression(Regressor):
+    '''
+    e) Report the error, for a step-size of 0.01 and 1000 epochs
+    '''
+    '''
+    f) 
+    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
+    training set is processed
+
+    Set the step-size to 0.01 for stochastic gradient descent. 
+    Report the error versus epochs, where one epoch involves processing the training set once. 
+    Report the error versus runtime
+    '''
+    def __init__(self, parameters={}):
+        self.params = {'num_epoch':1000, 'stepsize':0.001}
+        self.reset(parameters)
+
+    def learn(self, X, y):
+        # X numsamples*numfeatures
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+
+        start = time.time()
+        for i in range(self.params['num_epoch']):
+            np.random.shuffle(data)
+            for j in range(numsamples):
+                XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
+                yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
+
+                w = w - np.dot(self.params['stepsize'],g)
+            #print('epoch',i,'cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+
+
+        print('final cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+        
+        print('runtime:', time.time()-start)
+        self.weights = w
+        
+
+    def predict(self, Xtest):
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest
+
+    
+class BatchGDLinearRegression(Regressor):
+    '''
+    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
+    training set is processed
+
+    Report the error versus epochs, where one epoch involves processing the training set once. 
+    Report the error versus runtime
+    '''
+    def __init__(self, parameters={}):
+        self.params = {}
+        self.reset(parameters)
+
+    def cost(self, w, X, y):
+        return np.linalg.norm(np.dot(X,w)-y)**2/(2*X.shape[0])
+
+    def deriv_cost(self, w, X, y):
+        return np.dot(X.T,np.dot(X,w)-y)/X.shape[0]
+
+    def learn(self, X, y):
+        # X numsamples*numfeatures
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.random.rand(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        err = np.Infinity
+        tolerance = 10*np.exp(-4)
+        max_iter = 10*np.exp(5)
+
+        cost = np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples)
+        runs = 0
+
+        start = time.time()
+        while np.abs(cost - err)>tolerance and not runs>max_iter:
+            err = cost
+            g = self.deriv_cost(w, X, y) # compute gradient
+            a = self.line_search(w, X, y, err, g) # use backtracking line search to find the step-size
+            w = w - a*g
+            cost = self.cost(w, X, y)
+            print('Descent',runs,'| BGD cost:', cost)
+            runs+=1
+        print('final cost Batch GD with line search:',cost)
+        print(runs,'descents in total')
+        print('runtime:', time.time()-start)
+        self.weights = w
+        
+    def line_search(self, w, X, y, err, g):
+        a = 1
+        while not self.cost(w-a*g, X, y) < err:
+            a/=2
+        return a
+
+    def predict(self, Xtest):
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest
+
+
+class MiniBatchGDLinearRegression(Regressor):
+    '''
+    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
+    training set is processed
+
+    Report the error versus epochs, where one epoch involves processing the training set once. 
+    Report the error versus runtime
+    '''
+    def __init__(self, parameters={}):
+        self.params = {'batch_size':10,'num_epoch':1000}
+        self.reset(parameters)
+
+    def cost(self, w, X, y):
+        return np.linalg.norm(np.dot(X,w)-y)**2/(2*X.shape[0])
+
+    def deriv_cost(self, w, X, y):
+        return np.dot(X.T,np.dot(X,w)-y)/X.shape[0]
+
+    def learn(self, X, y):
+        # X numsamples*numfeatures
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.random.rand(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        err = np.Infinity
+        tolerance = 10*np.exp(-4)
+        max_iter = 10*np.exp(5)
+        #print('X',X.shape)
+        #print('Y',y.shape)
+        #print('W',w.shape)
+
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        #print('X',X.shape)
+        #print('Y',y.shape)
+        #print('W',w.shape)
+        data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+        #print('data shape:',data.shape)
+
+        start = time.time()
+        for i in range(self.params['num_epoch']):
+            np.random.shuffle(data)
+            for j in range(math.ceil(numsamples/self.params['batch_size'])):
+                # for batch j
+                start_idx = j*self.params['batch_size']
+                end_idx = j*self.params['batch_size'] +self.params['batch_size']
+                batch_size = self.params['batch_size']
+                if end_idx > numsamples:
+                    end_idx = numsamples
+                    batch_size = numsamples-start_idx
+
+                XjT = (data.T[:-1]).T[start_idx:end_idx].reshape(batch_size,numfeatures) #batch_size*numfeatures
+                yj = (data.T[-1:]).T[start_idx:end_idx].reshape(batch_size,1) #batch_size*1 
+                #print('xjT shape',XjT.shape)
+                #print('yj shape',yj.shape)
+                g = (np.dot(XjT.T,(np.dot(XjT, w)-yj))/batch_size).reshape(numfeatures,1)#numfeatures*1
+                w = w - 0.01*g
+        
+        print('final cost mini batch GD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+
+        print('runtime:', time.time()-start)
+        self.weights = w
+        
+
+
+    def predict(self, Xtest):
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest
+
+
+class SGDLinearRegressionRmsprop(Regressor):
+    '''
+    e) Report the error, for a step-size of 0.01 and 1000 epochs
+    '''
+    '''
+    f) 
+    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
+    training set is processed
+
+    Set the step-size to 0.01 for stochastic gradient descent. 
+    Report the error versus epochs, where one epoch involves processing the training set once. 
+    Report the error versus runtime
+    '''
+    def __init__(self, parameters={}):
+        self.params = {'num_epoch':1000, 'stepsize':0.001, 'decay':0.9}
+        self.reset(parameters)
+
+    def learn(self, X, y):
+        # X numsamples*numfeatures
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        eps = np.exp(-8)
+        data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+        ms = np.ones(numfeatures).reshape(numfeatures,1)
+        start = time.time()
+        for i in range(self.params['num_epoch']):
+            np.random.shuffle(data)
+            for j in range(numsamples):
+                XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
+                yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
+
+                ms = self.meansquare(ms, g, self.params['decay'])
+                w = w - np.dot(self.params['stepsize'], g/np.sqrt(ms+eps))
+                
+            #print('epoch',i,'| cost on SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+
+        #print('final cost SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+        
+        print('runtime:', time.time()-start)
+        self.weights = w
+        
+
+    def meansquare(self,ms,g,decay):
+        return decay*ms+(1-decay)*np.power(g,2)
+
+
+    def predict(self, Xtest):
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest
+
+
+class SGDLinearRegressionAmsgrad(Regressor):
+    '''
+    e) Report the error, for a step-size of 0.01 and 1000 epochs
+    '''
+    '''
+    f) 
+    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
+    training set is processed
+
+    Set the step-size to 0.01 for stochastic gradient descent. 
+    Report the error versus epochs, where one epoch involves processing the training set once. 
+    Report the error versus runtime
+    '''
+    def __init__(self, parameters={}):
+        self.params = {'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}
+        self.reset(parameters)
+
+    def learn(self, X, y):
+        # X numsamples*numfeatures
+        numsamples = X.shape[0]
+        numfeatures = X.shape[1]
+        y = y.reshape(numsamples,1) #reshape y to numsamples*1
+        w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+        m = np.zeros(numfeatures).reshape(numfeatures,1)
+        v = np.zeros(numfeatures).reshape(numfeatures,1)
+        vhat = np.zeros(numfeatures).reshape(numfeatures,1)
+        eps = np.exp(-8)
+
+
+        start = time.time()
+        for i in range(self.params['num_epoch']):
+            np.random.shuffle(data)
+            for j in range(numsamples):
+                XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
+                yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
+
+                m = np.dot(self.params['beta1'], m)+np.dot(1-self.params['beta1'], g)
+                v = np.dot(self.params['beta2'], v)+np.dot(1-self.params['beta2'], np.power(g,2))
+                vhat = np.maximum(vhat,v)
+
+                w = w - np.dot(self.params['stepsize'], m/(np.sqrt(vhat)+eps))
+                
+            #print('epoch',i,'| Cost on SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+
+        #print('final cost SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+
+        print('runtime:', time.time()-start)
+        self.weights = w
+        
+
+    def predict(self, Xtest):
+        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
+        return ytest

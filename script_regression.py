@@ -29,21 +29,30 @@ if __name__ == '__main__':
     testsize = 5000
     numruns = 1
 
-    regressionalgs = {'Random': algs.Regressor(),
-                'Mean': algs.MeanPredictor(),
-                'FSLinearRegression5': algs.FSLinearRegression({'features': [1,2,3,4,5]}),
-                'FSLinearRegression50': algs.FSLinearRegression({'features': range(50)}),
-                'RidgeLinearRegression': algs.RidgeLinearRegression(),
+    regressionalgs = {
+                #'Random': algs.Regressor(),
+                #'Mean': algs.MeanPredictor(),
+                #'FSLinearRegression5': algs.FSLinearRegression({'features': [1,2,3,4,5]}),
+                #'FSLinearRegression50': algs.FSLinearRegression({'features': range(50)}),
+                #'FSLinearRegression50': algs.FSLinearRegression({'features': range(384)}),
+                #'RidgeLinearRegression': algs.RidgeLinearRegression({'regwgt': 0.01}),
+                #'LassoRegression': algs.LassoLinearRegression({'regwgt': 0.01}),
+                #'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.01}),
+                #'BGD': algs.BatchGDLinearRegression(),                
+                #'MiniGD': algs.MiniBatchGDLinearRegression({'num_epoch':1000, 'batch_size':10, 'stepsize':0.01}),
+                #'SGDLinearRegressionRmsprop': algs.SGDLinearRegressionRmsprop({'num_epoch':1000, 'stepsize':0.001, 'decay':0.9}),
+                'SGDLinearRegressionAmsgrad': algs.SGDLinearRegressionAmsgrad({'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}),
+
              }
     numalgs = len(regressionalgs)
 
     # Enable the best parameter to be selected, to enable comparison
     # between algorithms with their best parameter settings
-    # NOTE: this regwgt is lambda
+    # NOTE: this is lambda
     parameters = (
-        {'regwgt': 0.0},
         {'regwgt': 0.01},
-        {'regwgt': 1.0},
+        #{'regwgt': 0.1},
+        #{'regwgt': 1.0},
                       )
     numparams = len(parameters)
     
@@ -64,23 +73,25 @@ if __name__ == '__main__':
                 # Train model
                 learner.learn(trainset[0], trainset[1])
                 # Test model
-                predictions = learner.predict(testset[0])
+                predictions = learner.predict(testset[0]) #testset[0]: test data Xtest, testset[1]: ground truth Ytest
                 error = geterror(testset[1], predictions)
                 print ('Error for ' + learnername + ': ' + str(error))
                 errors[learnername][p,r] = error
 
-
     for learnername in regressionalgs:
-        besterror = np.mean(errors[learnername][0,:])
+        besterror = np.mean(errors[learnername][0,:]) #start case
         bestparams = 0
         for p in range(numparams):
-            aveerror = np.mean(errors[learnername][p,:])
+            aveerror = np.mean(errors[learnername][p,:]) #extract avg error for parameter p of this learning algorithm
+            # there are multiple runs, aveerror is the mean of the all runs
+            #print('aveerror for ',learnername, ":",aveerror,", under parameter:",parameters[p])
             if aveerror < besterror:
                 besterror = aveerror
-                bestparams = p
+                bestparams = p #substitue the best parameter which generate the minimum error
 
         # Extract best parameters
         learner.reset(parameters[bestparams])
+        #print('bestparams for',learnername,":",parameters[bestparams])
         #print ('Best parameters for ' + learnername + ': ' + str(learner.getparams()))
         print ('Average error for ' + learnername + ': ' + str(besterror))
 
