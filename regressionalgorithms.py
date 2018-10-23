@@ -4,6 +4,10 @@ import math
 import time
 import utilities as utils
 
+import matplotlib
+import matplotlib.pyplot as plt
+
+
 class Regressor:
     """
     Generic regression interface; returns random regressor
@@ -200,7 +204,7 @@ class SGDLinearRegression(Regressor):
     Report the error versus runtime
     '''
     def __init__(self, parameters={}):
-        self.params = {'num_epoch':1000, 'stepsize':0.001}
+        self.params = {'num_epoch':1000, 'stepsize':0.01}
         self.reset(parameters)
 
     def learn(self, X, y):
@@ -210,7 +214,10 @@ class SGDLinearRegression(Regressor):
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
         data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+        
 
+        errors = []
+        times = []
         start = time.time()
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
@@ -220,12 +227,27 @@ class SGDLinearRegression(Regressor):
                 g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
 
                 w = w - np.dot(self.params['stepsize'],g)
-            #print('epoch',i,'cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
 
+            elapsed_time = time.time()-start
+            print('epoch',i+1,'| cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples),'| L2 error:',np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples, '| runtime:',elapsed_time)
+            times.append(elapsed_time)
+            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
 
-        print('final cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
         
-        print('runtime:', time.time()-start)
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
+        ax[0].plot(times, errors)
+        ax[1].set(xlabel='runtime (ms)', ylabel='L2 error',
+                   title='SGD, %d epoches, step-size=%f'%(self.params['num_epoch'], self.params['stepsize']))
+        ax[0].grid()
+        ax[1].plot(range(self.params['num_epoch']), errors)
+        ax[1].set(xlabel='epoch', ylabel='L2 error',
+                   title='SGD, %d epoches, step-size=%f'%(self.params['num_epoch'], self.params['stepsize']))
+        ax[1].grid()
+        fig.savefig("sgd.png")
+        plt.show()
+        
+        #print('final cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+        
         self.weights = w
         
 
@@ -243,7 +265,7 @@ class BatchGDLinearRegression(Regressor):
     Report the error versus runtime
     '''
     def __init__(self, parameters={}):
-        self.params = {}
+        self.params = {'num_epoch':1000}
         self.reset(parameters)
 
     def cost(self, w, X, y):
@@ -258,106 +280,61 @@ class BatchGDLinearRegression(Regressor):
         numfeatures = X.shape[1]
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.random.rand(numfeatures).reshape(numfeatures,1) # numfeatures*1
-        err = np.Infinity
-        tolerance = 10*np.exp(-4)
-        max_iter = 10*np.exp(5)
+
+        times = []
+        errors = []
 
         cost = np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples)
-        runs = 0
-
-        start = time.time()
-        while np.abs(cost - err)>tolerance and not runs>max_iter:
-            err = cost
-            g = self.deriv_cost(w, X, y) # compute gradient
-            a = self.line_search(w, X, y, err, g) # use backtracking line search to find the step-size
-            w = w - a*g
-            cost = self.cost(w, X, y)
-            print('Descent',runs,'| BGD cost:', cost)
-            runs+=1
-        print('final cost Batch GD with line search:',cost)
-        print(runs,'descents in total')
-        print('runtime:', time.time()-start)
-        self.weights = w
-        
-    def line_search(self, w, X, y, err, g):
-        a = 1
-        while not self.cost(w-a*g, X, y) < err:
-            a/=2
-        return a
-
-    def predict(self, Xtest):
-        ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
-        return ytest
-
-
-class MiniBatchGDLinearRegression(Regressor):
-    '''
-    Compare stochastic gradient descent to batch gradient descent, in terms of the number of times the entire
-    training set is processed
-
-    Report the error versus epochs, where one epoch involves processing the training set once. 
-    Report the error versus runtime
-    '''
-    def __init__(self, parameters={}):
-        self.params = {'batch_size':10,'num_epoch':1000}
-        self.reset(parameters)
-
-    def cost(self, w, X, y):
-        return np.linalg.norm(np.dot(X,w)-y)**2/(2*X.shape[0])
-
-    def deriv_cost(self, w, X, y):
-        return np.dot(X.T,np.dot(X,w)-y)/X.shape[0]
-
-    def learn(self, X, y):
-        # X numsamples*numfeatures
-        numsamples = X.shape[0]
-        numfeatures = X.shape[1]
-        y = y.reshape(numsamples,1) #reshape y to numsamples*1
-        w = np.random.rand(numfeatures).reshape(numfeatures,1) # numfeatures*1
-        err = np.Infinity
-        tolerance = 10*np.exp(-4)
-        max_iter = 10*np.exp(5)
-        #print('X',X.shape)
-        #print('Y',y.shape)
-        #print('W',w.shape)
-
-        y = y.reshape(numsamples,1) #reshape y to numsamples*1
-        w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
-        #print('X',X.shape)
-        #print('Y',y.shape)
-        #print('W',w.shape)
-        data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
-        #print('data shape:',data.shape)
-
         start = time.time()
         for i in range(self.params['num_epoch']):
-            np.random.shuffle(data)
-            for j in range(math.ceil(numsamples/self.params['batch_size'])):
-                # for batch j
-                start_idx = j*self.params['batch_size']
-                end_idx = j*self.params['batch_size'] +self.params['batch_size']
-                batch_size = self.params['batch_size']
-                if end_idx > numsamples:
-                    end_idx = numsamples
-                    batch_size = numsamples-start_idx
+            g = self.deriv_cost(w, X, y) # compute gradient
+            w, a = self.line_search(w, X, y, cost, g) # use backtracking line search to find the step-size
+            cost = self.cost(w, X, y)
 
-                XjT = (data.T[:-1]).T[start_idx:end_idx].reshape(batch_size,numfeatures) #batch_size*numfeatures
-                yj = (data.T[-1:]).T[start_idx:end_idx].reshape(batch_size,1) #batch_size*1 
-                #print('xjT shape',XjT.shape)
-                #print('yj shape',yj.shape)
-                g = (np.dot(XjT.T,(np.dot(XjT, w)-yj))/batch_size).reshape(numfeatures,1)#numfeatures*1
-                w = w - 0.01*g
+            elapsed_time = time.time()-start
+            print('epochs',i+1,'| cost Batch GD:', cost,'| L2 error:',np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples, '| runtime:',elapsed_time)
+            times.append(elapsed_time)
+            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
         
-        print('final cost mini batch GD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-
-        print('runtime:', time.time()-start)
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
+        ax[0].plot(times, errors)
+        ax[0].set(xlabel='runtime (ms)', ylabel='L2 error',
+                   title='Batch GD, %d epoches'%self.params['num_epoch'])
+        ax[0].grid()
+        ax[1].plot(range(self.params['num_epoch']), errors)
+        ax[1].set(xlabel='epoch', ylabel='L2 error',
+                   title='Batch GD, %d epoches'%self.params['num_epoch'])
+        ax[1].grid()
+        fig.savefig("batch-gd.png")
+        plt.show()
+        
+        #print('final cost Batch GD with line search:',cost)
         self.weights = w
         
+    def line_search(self, wt, X, y, obj, g):
+        a = 1.0
+        tolerance = 10*np.exp(-4)
+        max_iter = 1000
+        decay = 0.7
+        
+        w = wt
+        i = 0
+        while i<max_iter:
+            w = wt - a*g
+            if self.cost(w, X, y) < obj-tolerance: break
+            a*=decay
+            i+=1
 
+        if i == max_iter:
+            return (wt, 0)
+        else:
+            return (w, a)
 
     def predict(self, Xtest):
         ytest = np.dot(Xtest, self.weights).reshape(Xtest.shape[0])
         return ytest
+
+
 
 
 class SGDLinearRegressionRmsprop(Regressor):
@@ -386,6 +363,9 @@ class SGDLinearRegressionRmsprop(Regressor):
         eps = np.exp(-8)
         data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
         ms = np.ones(numfeatures).reshape(numfeatures,1)
+
+        costs = []
+        errors = []
         start = time.time()
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
@@ -398,10 +378,24 @@ class SGDLinearRegressionRmsprop(Regressor):
                 w = w - np.dot(self.params['stepsize'], g/np.sqrt(ms+eps))
                 
             #print('epoch',i,'| cost on SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-
-        #print('final cost SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+                costs.append(np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+                errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
         
         print('runtime:', time.time()-start)
+        #fig, ax = plt.subplots()
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
+        ax[0].plot(range(self.params['num_epoch']), costs)
+        ax[0].set(xlabel='epoch', ylabel='cost',
+                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
+        ax[0].grid()
+        ax[1].plot(range(self.params['num_epoch']), costs)
+        ax[1].set(xlabel='epoch', ylabel='L2 error',
+                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
+        ax[1].grid()
+        fig.savefig("sgd-amsgrad.png")
+        plt.show()
+        #print('final cost SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+        
         self.weights = w
         
 
@@ -443,7 +437,8 @@ class SGDLinearRegressionAmsgrad(Regressor):
         vhat = np.zeros(numfeatures).reshape(numfeatures,1)
         eps = np.exp(-8)
 
-
+        costs = []
+        errors = []
         start = time.time()
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
@@ -457,12 +452,31 @@ class SGDLinearRegressionAmsgrad(Regressor):
                 vhat = np.maximum(vhat,v)
 
                 w = w - np.dot(self.params['stepsize'], m/(np.sqrt(vhat)+eps))
+
+            costs.append(np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
+        
+        print('runtime:', time.time()-start)
+        #fig, ax = plt.subplots()
+        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
+        ax[0].plot(range(self.params['num_epoch']), costs)
+        ax[0].set(xlabel='epoch', ylabel='cost',
+                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
+        ax[0].grid()
+        ax[0].draw()
+        ax[1].plot(range(self.params['num_epoch']), errors)
+        ax[1].set(xlabel='epoch', ylabel='L2 error',
+                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
+        ax[1].grid()
+
+        ax[1].draw()
+        fig.savefig("sgd-amsgrad.png")
+        plt.show()
                 
             #print('epoch',i,'| Cost on SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
 
         #print('final cost SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
 
-        print('runtime:', time.time()-start)
         self.weights = w
         
 

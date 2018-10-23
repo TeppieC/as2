@@ -3,9 +3,12 @@ import csv
 import random
 import math
 import numpy as np
+import utilities as utils
 
 import dataloader as dtl
 import regressionalgorithms as algs
+import matplotlib
+import matplotlib.pyplot as plt
 
 def l2err(prediction,ytest):
     """ l2 error (i.e., root-mean-squared-error) """
@@ -37,11 +40,12 @@ if __name__ == '__main__':
                 #'FSLinearRegression50': algs.FSLinearRegression({'features': range(384)}),
                 #'RidgeLinearRegression': algs.RidgeLinearRegression({'regwgt': 0.01}),
                 #'LassoRegression': algs.LassoLinearRegression({'regwgt': 0.01}),
-                #'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.01}),
-                #'BGD': algs.BatchGDLinearRegression(),                
+                'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.01}),
+                'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.001}),
+                'BGD': algs.BatchGDLinearRegression({'num_epoch':1000}),                
                 #'MiniGD': algs.MiniBatchGDLinearRegression({'num_epoch':1000, 'batch_size':10, 'stepsize':0.01}),
                 #'SGDLinearRegressionRmsprop': algs.SGDLinearRegressionRmsprop({'num_epoch':1000, 'stepsize':0.001, 'decay':0.9}),
-                'SGDLinearRegressionAmsgrad': algs.SGDLinearRegressionAmsgrad({'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}),
+                #'SGDLinearRegressionAmsgrad': algs.SGDLinearRegressionAmsgrad({'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}),
 
              }
     numalgs = len(regressionalgs)
@@ -85,6 +89,8 @@ if __name__ == '__main__':
             aveerror = np.mean(errors[learnername][p,:]) #extract avg error for parameter p of this learning algorithm
             # there are multiple runs, aveerror is the mean of the all runs
             #print('aveerror for ',learnername, ":",aveerror,", under parameter:",parameters[p])
+            utils.stdev(errors[learnername][p,:])/np.sqrt(numruns)
+
             if aveerror < besterror:
                 besterror = aveerror
                 bestparams = p #substitue the best parameter which generate the minimum error
