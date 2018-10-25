@@ -26,26 +26,24 @@ def geterror(predictions, ytest):
     # Can change this to other error values
     return l2err(predictions,ytest)/ytest.shape[0]
 
-
 if __name__ == '__main__':
     trainsize = 1000
     testsize = 5000
     numruns = 1
 
     regressionalgs = {
-                #'Random': algs.Regressor(),
-                #'Mean': algs.MeanPredictor(),
-                #'FSLinearRegression5': algs.FSLinearRegression({'features': [1,2,3,4,5]}),
-                #'FSLinearRegression50': algs.FSLinearRegression({'features': range(50)}),
-                #'FSLinearRegression50': algs.FSLinearRegression({'features': range(384)}),
-                #'RidgeLinearRegression': algs.RidgeLinearRegression({'regwgt': 0.01}),
-                #'LassoRegression': algs.LassoLinearRegression({'regwgt': 0.01}),
-                'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.01}),
+                'Random': algs.Regressor(),
+                'Mean': algs.MeanPredictor(),
+                'FSLinearRegression5': algs.FSLinearRegression({'features': [1,2,3,4,5]}),
+                'FSLinearRegression50': algs.FSLinearRegression({'features': range(50)}),
+                #'FSLinearRegression50': algs.FSLinearRegression({'features': range(384)}), # no feature selection DO NOT UNCOMMENT THIS, WILL CRASH
+                'RidgeLinearRegression': algs.RidgeLinearRegression({'regwgt': 0.01}),
+                'LassoRegression': algs.LassoLinearRegression({'regwgt': 0.01}),
+                'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.010}),
                 'SGD': algs.SGDLinearRegression({'num_epoch':1000, 'stepsize':0.001}),
                 'BGD': algs.BatchGDLinearRegression({'num_epoch':1000}),                
-                #'MiniGD': algs.MiniBatchGDLinearRegression({'num_epoch':1000, 'batch_size':10, 'stepsize':0.01}),
-                #'SGDLinearRegressionRmsprop': algs.SGDLinearRegressionRmsprop({'num_epoch':1000, 'stepsize':0.001, 'decay':0.9}),
-                #'SGDLinearRegressionAmsgrad': algs.SGDLinearRegressionAmsgrad({'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}),
+                'SGDLinearRegressionRmsprop': algs.SGDLinearRegressionRmsprop({'num_epoch':1000, 'stepsize':0.001, 'decay':0.9}),
+                'SGDLinearRegressionAmsgrad': algs.SGDLinearRegressionAmsgrad({'num_epoch':1000, 'stepsize':0.001, 'beta1':0.9,'beta2':0.99}),
 
              }
     numalgs = len(regressionalgs)
@@ -67,7 +65,6 @@ if __name__ == '__main__':
     for r in range(numruns):
         trainset, testset = dtl.load_ctscan(trainsize,testsize)
         print(('Running on train={0} and test={1} samples for run {2}').format(trainset[0].shape[0], testset[0].shape[0],r))
-
         for p in range(numparams):
             params = parameters[p]
             for learnername, learner in regressionalgs.items():
@@ -88,8 +85,7 @@ if __name__ == '__main__':
         for p in range(numparams):
             aveerror = np.mean(errors[learnername][p,:]) #extract avg error for parameter p of this learning algorithm
             # there are multiple runs, aveerror is the mean of the all runs
-            #print('aveerror for ',learnername, ":",aveerror,", under parameter:",parameters[p])
-            utils.stdev(errors[learnername][p,:])/np.sqrt(numruns)
+            print('Std error for',learnername, np.std(errors[learnername][p,:])/np.sqrt(numruns)) # QUESTION 2.b
 
             if aveerror < besterror:
                 besterror = aveerror

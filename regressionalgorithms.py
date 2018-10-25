@@ -8,6 +8,15 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 
+def write_to_file(filename, runtime_list, error_list, num_epoch):
+    '''
+    Helper function to write data to file, in order to plot the curve
+    '''
+    with open(filename,'w') as f:
+        for i in range(num_epoch):
+            f.write(str(i)+','+str(runtime_list[i])+','+str(error_list[i])+'\n')
+
+
 class Regressor:
     """
     Generic regression interface; returns random regressor
@@ -178,7 +187,7 @@ class LassoLinearRegression(Regressor):
 
         while np.abs(cost_w - err)>tolerance and not runs>self.max_runs:
             err = cost_w
-            w = self.proximal(w-self.stepsize*np.dot(xx,w)+self.stepsize*xy) #update w
+            w = self.proximal(w-self.stepsize*np.dot(xx,w)+self.stepsize*xy) # update w
             cost_w = self.cost(w, X, y)
             runs+=1
         self.weights = w
@@ -208,44 +217,54 @@ class SGDLinearRegression(Regressor):
         self.reset(parameters)
 
     def learn(self, X, y):
-        # X numsamples*numfeatures
         numsamples = X.shape[0]
         numfeatures = X.shape[1]
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
+        # concatenate the training X and y together, before shuffling
         data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
-        
 
-        errors = []
-        times = []
+        #errors = []
+        #times = []
         start = time.time()
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
             for j in range(numsamples):
+                # extract one data point (xj.T, yj)
                 XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
                 yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                # compute gradient
                 g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
-
+                # update weights
                 w = w - np.dot(self.params['stepsize'],g)
 
+            # collect misc info to draw the plot
             elapsed_time = time.time()-start
             print('epoch',i+1,'| cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples),'| L2 error:',np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples, '| runtime:',elapsed_time)
-            times.append(elapsed_time)
-            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
+            #times.append(elapsed_time)
+            #errors.append(np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
+            #errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
 
-        
+        '''
+        # Draw plot
+        #   plot 1: L2 error v.s runtime
+        #   plot 2: L2 error v.s epoch
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
         ax[0].plot(times, errors)
-        ax[1].set(xlabel='runtime (ms)', ylabel='L2 error',
-                   title='SGD, %d epoches, step-size=%f'%(self.params['num_epoch'], self.params['stepsize']))
+        ax[0].set(xlabel='runtime (ms)', ylabel='cost',
+                   title='SGD, %d epoches, step-size=%.4f'%(self.params['num_epoch'], self.params['stepsize']))
         ax[0].grid()
         ax[1].plot(range(self.params['num_epoch']), errors)
-        ax[1].set(xlabel='epoch', ylabel='L2 error',
-                   title='SGD, %d epoches, step-size=%f'%(self.params['num_epoch'], self.params['stepsize']))
+        ax[1].set(xlabel='epoch', ylabel='cost',
+                   title='SGD, %d epoches, step-size=%.4f'%(self.params['num_epoch'], self.params['stepsize']))
         ax[1].grid()
-        fig.savefig("sgd.png")
+        fig.savefig("sgd.png") # plot will be saved to the current directory
         plt.show()
-        
+        '''
+
+        # write the performance data to file
+        #write_to_file('SGD.csv', times, errors, self.params['num_epoch'])
+
         #print('final cost SGD:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
         
         self.weights = w
@@ -263,6 +282,11 @@ class BatchGDLinearRegression(Regressor):
 
     Report the error versus epochs, where one epoch involves processing the training set once. 
     Report the error versus runtime
+
+
+    NOTE: As instructed by TA's in lab, this algorithm is implemented in a slightly different way as it was on class notes.
+    The Batch Gradient Descent ends after 1000 epoches, even though it usually takes ~100 epoches to converge.
+    In class notes, the Batch GD ends if the cost is no longer descreasing within a threshold.
     '''
     def __init__(self, parameters={}):
         self.params = {'num_epoch':1000}
@@ -281,40 +305,53 @@ class BatchGDLinearRegression(Regressor):
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.random.rand(numfeatures).reshape(numfeatures,1) # numfeatures*1
 
-        times = []
-        errors = []
-
+        #times = []
+        #errors = []
         cost = np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples)
         start = time.time()
         for i in range(self.params['num_epoch']):
-            g = self.deriv_cost(w, X, y) # compute gradient
-            w, a = self.line_search(w, X, y, cost, g) # use backtracking line search to find the step-size
+            # compute gradient
+            g = self.deriv_cost(w, X, y) 
+            # use backtracking line search to find the step-size
+            w, a = self.line_search(w, X, y, cost, g) 
+            # compute loss
             cost = self.cost(w, X, y)
 
+            # collect misc data to draw the plot
             elapsed_time = time.time()-start
             print('epochs',i+1,'| cost Batch GD:', cost,'| L2 error:',np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples, '| runtime:',elapsed_time)
-            times.append(elapsed_time)
-            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
+            #times.append(elapsed_time)
+            #errors.append(cost)
+            #errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
         
+        '''
+        # Draw plot
+        #   plot 1: L2 error v.s runtime
+        #   plot 2: L2 error v.s epoch
         fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
         ax[0].plot(times, errors)
-        ax[0].set(xlabel='runtime (ms)', ylabel='L2 error',
+        ax[0].set(xlabel='runtime (ms)', ylabel='cost',
                    title='Batch GD, %d epoches'%self.params['num_epoch'])
         ax[0].grid()
         ax[1].plot(range(self.params['num_epoch']), errors)
-        ax[1].set(xlabel='epoch', ylabel='L2 error',
+        ax[1].set(xlabel='epoch', ylabel='cost',
                    title='Batch GD, %d epoches'%self.params['num_epoch'])
         ax[1].grid()
-        fig.savefig("batch-gd.png")
+        fig.savefig("batch-gd.png") #plot will be save to current directory
         plt.show()
+        '''
+
+        # write performace data to file
+        #write_to_file('BGD.csv', times, errors, self.params['num_epoch'])
+
         
         #print('final cost Batch GD with line search:',cost)
         self.weights = w
         
     def line_search(self, wt, X, y, obj, g):
-        a = 1.0
+        a = 0.01
         tolerance = 10*np.exp(-4)
-        max_iter = 1000
+        max_iter = 100
         decay = 0.7
         
         w = wt
@@ -361,41 +398,42 @@ class SGDLinearRegressionRmsprop(Regressor):
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
         eps = np.exp(-8)
+        # concatenate X and y before shuffling
         data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+
+        #initialize param for rmsprop
         ms = np.ones(numfeatures).reshape(numfeatures,1)
 
-        costs = []
-        errors = []
-        start = time.time()
+        #errors = [] # for plotting
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
             for j in range(numsamples):
+                # extract a single data point (xj,yj)
                 XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
                 yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                # compute gradient
                 g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
 
+                # compute meansquare
                 ms = self.meansquare(ms, g, self.params['decay'])
+                # update weights with a decaying rmsprop learning rate
                 w = w - np.dot(self.params['stepsize'], g/np.sqrt(ms+eps))
                 
-            #print('epoch',i,'| cost on SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-                costs.append(np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-                errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
+            #print('epoch',i,'| cost on SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples)) #for debugging
+            #errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples) # for plotting
         
-        print('runtime:', time.time()-start)
-        #fig, ax = plt.subplots()
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
-        ax[0].plot(range(self.params['num_epoch']), costs)
-        ax[0].set(xlabel='epoch', ylabel='cost',
-                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
-        ax[0].grid()
-        ax[1].plot(range(self.params['num_epoch']), costs)
-        ax[1].set(xlabel='epoch', ylabel='L2 error',
-                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
-        ax[1].grid()
-        fig.savefig("sgd-amsgrad.png")
+        '''
+        # draw graph
+        fig, ax = plt.subplots()
+        ax.plot(range(self.params['num_epoch']), errors)
+        ax.set(xlabel='epoch', ylabel='L2 error',
+                   title='SGD-rmsprop, 1000 epoches, step-size=%f'%self.params['stepsize'])
+        ax.grid()
+        fig.savefig("SGD-rmsprop.png")
         plt.show()
-        #print('final cost SGD rmsprop:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-        
+        '''
+        #print('After %d epochs, L2-error of SGD rmsprop (w.r.t training set):'%self.params['num_epoch'], np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
+
         self.weights = w
         
 
@@ -432,51 +470,44 @@ class SGDLinearRegressionAmsgrad(Regressor):
         y = y.reshape(numsamples,1) #reshape y to numsamples*1
         w = np.ones(numfeatures).reshape(numfeatures,1) # numfeatures*1
         data = np.concatenate((X,y), axis=1) # numsamples*(numfeatures+1)
+
+        # initialize params for Amsgrad
         m = np.zeros(numfeatures).reshape(numfeatures,1)
         v = np.zeros(numfeatures).reshape(numfeatures,1)
         vhat = np.zeros(numfeatures).reshape(numfeatures,1)
         eps = np.exp(-8)
 
-        costs = []
-        errors = []
-        start = time.time()
+        #errors = [] #for plotting
         for i in range(self.params['num_epoch']):
             np.random.shuffle(data)
             for j in range(numsamples):
+                # extract one single data point (xj, yj)
                 XjT = (data.T[:-1]).T[j].reshape(1,numfeatures) #1*numfeatures
                 yj = (data.T[-1:]).T[j].reshape(1,1) #1*1 
+                # compute gradient
                 g = np.multiply((np.dot(XjT, w)-yj),XjT.T).reshape(numfeatures,1)#numfeatures*1
 
+                # Amsgrad
                 m = np.dot(self.params['beta1'], m)+np.dot(1-self.params['beta1'], g)
                 v = np.dot(self.params['beta2'], v)+np.dot(1-self.params['beta2'], np.power(g,2))
                 vhat = np.maximum(vhat,v)
 
+                # update w
                 w = w - np.dot(self.params['stepsize'], m/(np.sqrt(vhat)+eps))
 
-            costs.append(np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-            errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y)))
+            #errors.append(np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)#for plotting
+        '''
         
-        print('runtime:', time.time()-start)
-        #fig, ax = plt.subplots()
-        fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(10,6.15))
-        ax[0].plot(range(self.params['num_epoch']), costs)
-        ax[0].set(xlabel='epoch', ylabel='cost',
-                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
-        ax[0].grid()
-        ax[0].draw()
-        ax[1].plot(range(self.params['num_epoch']), errors)
-        ax[1].set(xlabel='epoch', ylabel='L2 error',
-                   title='SGD-amsgrad, 1000 epoches, step-size=0.001')
-        ax[1].grid()
-
-        ax[1].draw()
+        fig, ax = plt.subplots()
+        ax.plot(range(self.params['num_epoch']), errors)
+        ax.set(xlabel='epoch', ylabel='L2 error',
+                   title='SGD-amsgrad, 1000 epoches, step-size=%f'%self.params['stepsize'])
+        ax.grid()
         fig.savefig("sgd-amsgrad.png")
         plt.show()
-                
-            #print('epoch',i,'| Cost on SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-
-        #print('final cost SGD amsgrad:', np.linalg.norm(np.dot(X,w)-y)**2/(2*numsamples))
-
+        '''
+        #print('After %d epochs, L2-error of SGD amsgrad (w.r.t training set):'%self.params['num_epoch'], np.linalg.norm(np.subtract(np.dot(X,w),y))/numsamples)
+        
         self.weights = w
         
 

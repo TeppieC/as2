@@ -1,16 +1,13 @@
-bgd的line search每次将a还原吗
-bgd的cost变化多少，收敛于多少，一般多少次descent
-bgd的runtime比sgd的快很多，结果差很多，是陷在local minimum了吗？
-哪里设ms=1
 
+********************************  Only some notes, detail answers are in the pdf file **************************************
+SGDLinearRegression
+The stochastic gradient descent won't perform well in a step-size of 0.01. Its fluctuation is too large so that its graph doesn't look like a convergence. If I tweaked its learning rate/step-size to 0.001, it works much better. Both graphs for step-size=0.01 and 0.001 are included. 
 
-How to report these xxx versus xxx? Draw a graph or list statistics?
-Where do you change parameter/hyperparameters when testing our code? In parameters, or in the function itself? Are you going to use the same name?
+BatchGDLinearRegression
+As instructed by TA's in lab, this algorithm is implemented in a slightly different way as it was on class notes.
+The Batch Gradient Descent ends after 1000 epoches, even though it usually takes ~100 epoches to converge.
+In class notes, the Batch GD ends if the cost is no longer descreasing within a threshold.
 
-What is the error reported for question e) f) and Bonus questions? The average error provided in the template code?
-Will providing a graph that the error versus epoch/runtime suffice for what asked in question f)
-What do you mean by runtime? 
-Is this error or just cost?
+The file plot_comparison_graph.py and some helper functions are only created for ploting graphs. You might need to manually tweak some parameters to plot desiring graphs.
 
-For error, I used l2-error if not specified in the question.
-For batch gradient descent in question f), since I was asked to compare it with a SGD of 1000 epoches, my implementation of batch gradient descent terminates after 1000 epoches, although it only need ~20 descents to reach the minimum point. Its implementation is therefore different with the one on class notes.
+Please check my PDF submission for detail answers to other questions.
